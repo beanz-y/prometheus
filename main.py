@@ -154,8 +154,8 @@ def _startup_update_check():
             return False
 
         if apply_update(extract_dir):
-            print("\n  Update installed! Please restart the game.")
-            return True  # Signal caller to exit
+            # The batch script will wait for us to exit, then copy files and relaunch
+            return True  # Signal caller to exit immediately
         else:
             print("  Update could not be applied. Starting current version.\n")
             return False
@@ -169,8 +169,10 @@ def _startup_update_check():
 def main():
     """Main entry point."""
     if _startup_update_check():
-        # Update was applied - exit so user restarts with new version
-        input("  [Press ENTER to exit]")
+        # Batch script is waiting for us to exit, will copy files and relaunch
+        import time
+        print("  Closing in 3 seconds...")
+        time.sleep(3)
         return
     while True:
         choice = main_menu()

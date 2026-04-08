@@ -94,7 +94,7 @@ def check_for_update():
         with urlopen(req, timeout=5, context=_SSL_CTX) as resp:
             data = json.loads(resp.read().decode('utf-8'))
 
-        latest_tag = data.get('tag_name', '0.0.0')
+        latest_tag = data.get('tag_name', '0.0.0').lstrip('v')
         latest_ver = parse_version(latest_tag)
         current_ver = parse_version(current)
 
@@ -186,10 +186,11 @@ def download_update(download_url, dest_dir=None):
 
 
 def apply_update(extract_dir, app_dir=None):
-    """Copy extracted update files over the current installation.
+    """Apply update by writing a batch script that runs after the exe exits.
 
-    Creates a backup of the current version first.
-    Preserves the saves/ directory.
+    On Windows, the running .exe is locked and can't be overwritten.
+    Solution: write a .bat that waits for the process to die, copies
+    new files over (preserving saves/), then relaunches the game.
     """
     if app_dir is None:
         if getattr(sys, 'frozen', False):
@@ -197,39 +198,82 @@ def apply_update(extract_dir, app_dir=None):
         else:
             app_dir = os.getcwd()
 
+    exe_name = os.path.basename(sys.executable) if getattr(sys, 'frozen', False) else None
+    exe_path = sys.executable if getattr(sys, 'frozen', False) else None
+
+    if not exe_name:
+        # Dev mode (not frozen) - just copy directly
+        try:
+            for item in os.listdir(extract_dir):
+                if item == 'saves':
+                    continue
+                src = os.path.join(extract_dir, item)
+                dst = os.path.join(app_dir, item)
+                if os.path.isdir(src):
+                    if os.path.exists(dst):
+                        shutil.rmtree(dst)
+                    shutil.copytree(src, dst)
+                else:
+                    shutil.copy2(src, dst)
+            print("  Update applied! Restart the game to use the new version.")
+            return True
+        except Exception as e:
+            print(f"  Update failed: {e}")
+            return False
+
+    # Frozen exe mode: write a batch script to do the swap after we exit
+    bat_path = os.path.join(app_dir, '_update.bat')
+    # Normalize paths for batch script (use backslashes)
+    src_dir = extract_dir.replace('/', '\\')
+    dst_dir = app_dir.replace('/', '\\')
+    exe_full = exe_path.replace('/', '\\')
+
+    bat_content = f'''@echo off
+echo Updating The Prometheus Protocol...
+echo Waiting for game to close...
+
+:waitloop
+timeout /t 1 /nobreak >nul
+tasklist /FI "IMAGENAME eq {exe_name}" 2>nul | find /i "{exe_name}" >nul
+if not errorlevel 1 goto waitloop
+
+echo Game closed. Installing update...
+
+rem Copy new files, skip saves folder
+for /d %%D in ("{src_dir}\\*") do (
+    set "dirname=%%~nxD"
+    if /i not "%%~nxD"=="saves" (
+        if exist "{dst_dir}\\%%~nxD" rmdir /s /q "{dst_dir}\\%%~nxD"
+        xcopy "%%D" "{dst_dir}\\%%~nxD\\" /e /i /q /y >nul
+    )
+)
+for %%F in ("{src_dir}\\*.*") do (
+    copy /y "%%F" "{dst_dir}\\" >nul
+)
+
+echo Update complete! Restarting...
+start "" "{exe_full}"
+
+rem Clean up temp files and this script
+rmdir /s /q "{src_dir}" 2>nul
+del "%~f0" 2>nul
+'''
+
     try:
-        # Backup current _internal (the game code, not saves)
-        internal = os.path.join(app_dir, '_internal')
-        backup = os.path.join(app_dir, '_internal_backup')
-        if os.path.exists(internal):
-            if os.path.exists(backup):
-                shutil.rmtree(backup)
-            shutil.copytree(internal, backup)
+        with open(bat_path, 'w') as f:
+            f.write(bat_content)
 
-        # Copy new files, skipping saves/
-        for item in os.listdir(extract_dir):
-            src = os.path.join(extract_dir, item)
-            dst = os.path.join(app_dir, item)
+        # Launch the batch script hidden (minimized)
+        import subprocess
+        subprocess.Popen(
+            ['cmd', '/c', 'start', '/min', '', bat_path],
+            cwd=app_dir,
+            creationflags=0x08000000,  # CREATE_NO_WINDOW
+        )
 
-            # Never overwrite saves
-            if item == 'saves':
-                continue
-
-            if os.path.isdir(src):
-                if os.path.exists(dst):
-                    shutil.rmtree(dst)
-                shutil.copytree(src, dst)
-            else:
-                shutil.copy2(src, dst)
-
-        print("  Update applied! Please restart the game.")
+        print("  Update ready! The game will close and restart automatically.")
         return True
 
-    except PermissionError:
-        print("  Cannot update while game is running.")
-        print(f"  New version extracted to: {extract_dir}")
-        print("  Close the game, copy files manually, then restart.")
-        return False
     except Exception as e:
         print(f"  Update failed: {e}")
         return False
