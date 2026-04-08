@@ -231,11 +231,16 @@ def apply_update(extract_dir, app_dir=None):
     bat_content = f'''@echo off
 echo Updating The Prometheus Protocol...
 echo Waiting for game to close...
+timeout /t 5 /nobreak >nul
 
+rem Try to verify the exe is unlocked by renaming it
 :waitloop
-timeout /t 1 /nobreak >nul
-tasklist /FI "IMAGENAME eq {exe_name}" 2>nul | find /i "{exe_name}" >nul
-if not errorlevel 1 goto waitloop
+ren "{dst_dir}\\{exe_name}" "{exe_name}.updating" >nul 2>&1
+if errorlevel 1 (
+    timeout /t 2 /nobreak >nul
+    goto waitloop
+)
+ren "{dst_dir}\\{exe_name}.updating" "{exe_name}" >nul 2>&1
 
 echo Game closed. Installing update...
 
