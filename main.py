@@ -110,23 +110,67 @@ def show_about():
 
 
 def _startup_update_check():
-    """Quick background check on startup. Just notifies, doesn't download."""
+    """Check for updates on startup. Prompts user to install or skip."""
     try:
-        from engine.updater import check_for_update, UPDATE_CHECK_URL
+        from engine.updater import (
+            check_for_update, download_update, apply_update,
+            get_current_version, UPDATE_CHECK_URL,
+        )
         if not UPDATE_CHECK_URL:
-            return
+            return False
+
+        print(f"  Checking for updates... (v{get_current_version()})")
         result = check_for_update()
-        if result and result['available']:
-            print(f"\n  * Update available: v{result['latest']} "
-                  f"(you have v{result['current']})")
-            print("  * Select 'Check for Updates' from the menu to install.\n")
+
+        if result is None:
+            print("  Could not reach update server. Starting offline.\n")
+            return False
+
+        if not result['available']:
+            print(f"  Up to date.\n")
+            return False
+
+        # Update available - prompt the user
+        print(f"\n  *** UPDATE AVAILABLE ***")
+        print(f"  New version:     v{result['latest']}")
+        print(f"  Your version:    v{result['current']}")
+        if result.get('release_notes'):
+            # Show first few lines of notes
+            notes = result['release_notes'].strip().split('\n')
+            for line in notes[:5]:
+                print(f"    {line}")
+        print()
+        answer = input("  Install update now? (y/n): ").strip().lower()
+
+        if answer not in ('y', 'yes'):
+            print("  Skipping update. You can update later from the menu.\n")
+            return False
+
+        # Download and apply
+        extract_dir = download_update(result['download_url'])
+        if not extract_dir:
+            print("  Download failed. Starting current version.\n")
+            return False
+
+        if apply_update(extract_dir):
+            print("\n  Update installed! Please restart the game.")
+            return True  # Signal caller to exit
+        else:
+            print("  Update could not be applied. Starting current version.\n")
+            return False
+
     except Exception:
-        pass  # Silently fail - don't block game startup
+        # Never block game startup due to update errors
+        print("  Update check skipped.\n")
+        return False
 
 
 def main():
     """Main entry point."""
-    _startup_update_check()
+    if _startup_update_check():
+        # Update was applied - exit so user restarts with new version
+        input("  [Press ENTER to exit]")
+        return
     while True:
         choice = main_menu()
 
