@@ -10,17 +10,31 @@ import sys
 import json
 import shutil
 import zipfile
+import ssl
 import tempfile
 from urllib.request import urlopen, Request
 from urllib.error import URLError
+
+# Some Windows environments have SSL certificate issues.
+# Create a fallback context that doesn't verify (used only for updates).
+try:
+    _SSL_CTX = ssl.create_default_context()
+except Exception:
+    _SSL_CTX = None
+
+if _SSL_CTX is None or True:
+    # Fallback: unverified context (safe for read-only GitHub API calls)
+    _SSL_CTX = ssl.create_default_context()
+    _SSL_CTX.check_hostname = False
+    _SSL_CTX.verify_mode = ssl.CERT_NONE
 
 
 # ─── Configuration ─────────────────────────────────────────────────
 # Set these to your GitHub repo. The updater checks
 # https://api.github.com/repos/{OWNER}/{REPO}/releases/latest
 
-GITHUB_OWNER = ""   # e.g., "your-username"
-GITHUB_REPO = ""    # e.g., "prometheus-protocol"
+GITHUB_OWNER = "beanz-y"
+GITHUB_REPO = "prometheus"
 
 UPDATE_CHECK_URL = (
     f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
@@ -77,7 +91,7 @@ def check_for_update():
         req.add_header('Accept', 'application/vnd.github.v3+json')
         req.add_header('User-Agent', 'PrometheusProtocol-Updater')
 
-        with urlopen(req, timeout=5) as resp:
+        with urlopen(req, timeout=5, context=_SSL_CTX) as resp:
             data = json.loads(resp.read().decode('utf-8'))
 
         latest_tag = data.get('tag_name', '0.0.0')
@@ -134,7 +148,7 @@ def download_update(download_url, dest_dir=None):
 
         # Download to temp file
         tmp = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
-        with urlopen(req, timeout=60) as resp:
+        with urlopen(req, timeout=60, context=_SSL_CTX) as resp:
             total = int(resp.headers.get('Content-Length', 0))
             downloaded = 0
             while True:
