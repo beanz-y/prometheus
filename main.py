@@ -73,17 +73,18 @@ def main_menu():
     """Display the main menu."""
     from engine.updater import get_current_version
     ver = get_current_version()
+    w = 38  # inner width between the ║ bars
     print()
-    print("  ╔══════════════════════════════════════╗")
-    print("  ║     THE PROMETHEUS PROTOCOL          ║")
-    print(f"  ║     v{ver:<33s}║")
-    print("  ║                                      ║")
-    print("  ║  1. New Game                         ║")
-    print("  ║  2. Load Game                        ║")
-    print("  ║  3. About                            ║")
-    print("  ║  4. Check for Updates                ║")
-    print("  ║  5. Quit                             ║")
-    print("  ╚══════════════════════════════════════╝")
+    print(f"  ╔{'═' * w}╗")
+    print(f"  ║{'THE PROMETHEUS PROTOCOL':^{w}}║")
+    print(f"  ║{('v' + ver):^{w}}║")
+    print(f"  ║{' ' * w}║")
+    print(f"  ║{'  1. New Game':<{w}}║")
+    print(f"  ║{'  2. Load Game':<{w}}║")
+    print(f"  ║{'  3. About':<{w}}║")
+    print(f"  ║{'  4. Check for Updates':<{w}}║")
+    print(f"  ║{'  5. Quit':<{w}}║")
+    print(f"  ╚{'═' * w}╝")
     print()
     choice = input("  Enter choice: ").strip()
     return choice
