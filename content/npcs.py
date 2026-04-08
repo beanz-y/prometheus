@@ -191,8 +191,8 @@ def build_all_npcs(world):
         dialogue_tree="kirilov_conversation",
         role="threat",
         location="medical_corridor",
-        health=80,
-        damage=20,
+        health=40,
+        damage=15,
         greeting=(
             "His eyes clear for a moment - brown, human, afraid. 'Please - "
             "please, I can feel it in me. It's like drowning from the inside. "

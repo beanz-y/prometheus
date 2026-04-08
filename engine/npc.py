@@ -83,6 +83,12 @@ class NPC:
         for alias in self.aliases:
             if name == alias.lower():
                 return 80
+        # State-based aliases: "body"/"corpse" for dead NPCs, "unconscious" for sedated
+        if not self.alive and name in ('body', 'corpse', 'dead body', 'remains'):
+            return 60
+        if self.has_flag('sedated') and name in ('body', 'unconscious', 'unconscious body',
+                                                  'sleeping', 'sedated', 'collapsed'):
+            return 60
         # Full title+name match
         full = f"{self.title} {self.name}".lower().strip()
         if name == full:
@@ -108,6 +114,14 @@ class NPC:
 
     def get_description(self) -> str:
         """Return description based on current state."""
+        if self.has_flag('sedated'):
+            return (
+                f"{self.name} lies crumpled on the deck, unconscious. The "
+                f"sedative has taken full effect. Their breathing is shallow "
+                f"but steady, and the silver veins beneath their skin have "
+                f"dimmed to a faint grey. They are alive, but not a threat. "
+                f"For now."
+            )
         desc = self.description
         if not self.alive:
             desc += "\n\nThey are not moving. Not breathing. Dead."

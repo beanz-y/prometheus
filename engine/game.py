@@ -197,12 +197,39 @@ class Game:
 
     # ─── Room Display ──────────────────────────────────────────────────
 
+    def _check_sedation_wakeups(self, current_room):
+        """Wake up sedated NPCs when the player has left their deck and returned."""
+        for npc in self.world.npcs.values():
+            if not npc.has_flag('sedated') or not npc.alive:
+                continue
+            sedated_deck = npc.state.get('sedated_on_deck', '')
+            if not sedated_deck:
+                continue
+            # Player is on a DIFFERENT deck than where sedation happened
+            # Mark that they left the deck
+            if current_room.deck != sedated_deck:
+                npc.state['player_left_sedation_deck'] = True
+            # Player RETURNED to the sedation deck after leaving
+            elif npc.state.get('player_left_sedation_deck'):
+                npc.remove_flag('sedated')
+                npc.hostile = True
+                npc.state.pop('sedated_on_deck', None)
+                npc.state.pop('player_left_sedation_deck', None)
+                npc.state['threatening'] = False  # Gets warning turn again
+                self.player.remove_flag(f"{npc.id}_sedated")
+                self.display.warning(
+                    f"You hear movement nearby. {npc.name} has woken up."
+                )
+
     def describe_current_room(self, brief: bool = False):
         """Print the current room description."""
         room = self.world.get_room(self.player.current_room)
         if not room:
             self.display.error("ERROR: You are nowhere.")
             return
+
+        # Check if any sedated NPCs should wake up
+        self._check_sedation_wakeups(room)
 
         self.display.location(room.name)
 
@@ -805,6 +832,17 @@ class Game:
                              color=Color.YELLOW)
             return
 
+        # Auto-extract from containers if needed (e.g., "use sedative" when
+        # it's inside the medical kit in your inventory)
+        if item.id not in self.player.inventory:
+            for container_id in self.player.inventory:
+                container = self.world.get_item(container_id)
+                if container and container.container and not container.closed:
+                    if item.id in container.contents:
+                        container.contents.remove(item.id)
+                        self.player.add_item(item.id)
+                        break
+
         # If there's an indirect object, use item ON that
         if command.indirect_object:
             # For "use X on Y" - check NPCs first (sedative on figure, etc.)
@@ -905,6 +943,9 @@ class Game:
                 target.add_flag('sedated')
                 target.hostile = False
                 target.state['threatening'] = False
+                # Track which deck the sedation happened on
+                current_room = self.world.get_room(self.player.current_room)
+                target.state['sedated_on_deck'] = current_room.deck if current_room else ''
                 self.player.remove_item(item.id)
                 self.player.log_action(f"sedated_{target.id}")
                 # Set player flag so encounter events know not to fire

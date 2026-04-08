@@ -74,6 +74,7 @@ VERB_SYNONYMS = {
 
     # Combat/physical
     'attack': 'attack', 'hit': 'attack', 'strike': 'attack', 'fight': 'attack',
+    'punch': 'attack', 'kick': 'attack', 'stab': 'attack', 'slash': 'attack',
     'shoot': 'shoot', 'fire': 'shoot',
     'throw': 'throw', 'toss': 'throw', 'hurl': 'throw',
     'kill': 'attack',
